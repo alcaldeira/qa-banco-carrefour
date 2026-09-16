@@ -1,14 +1,9 @@
 package com.serverest.api.factory;
 
-import com.serverest.api.dto.UsuarioRequestDTO;
+import com.serverest.api.model.UsuarioRequest;
 
 import java.util.UUID;
 
-/**
- * Fábrica de massa de dados para os testes de usuário. Gera sempre e-mails únicos
- * (a base da ServeRest é pública e compartilhada entre todos os candidatos/usuários,
- * então reutilizar um e-mail fixo causaria colisões e testes instáveis em CI).
- */
 public final class UsuarioFactory {
 
     private static final String SENHA_PADRAO = "Teste@123";
@@ -16,9 +11,9 @@ public final class UsuarioFactory {
     private UsuarioFactory() {
     }
 
-    public static UsuarioRequestDTO usuarioValidoAdministrador() {
+    public static UsuarioRequest usuarioValidoAdministrador() {
         String identificador = UUID.randomUUID().toString();
-        return UsuarioRequestDTO.builder()
+        return UsuarioRequest.builder()
                 .nome("QA Automation " + identificador.substring(0, 8))
                 .email("qa.automation." + identificador + "@teste.com")
                 .password(SENHA_PADRAO)
@@ -26,9 +21,9 @@ public final class UsuarioFactory {
                 .build();
     }
 
-    public static UsuarioRequestDTO usuarioValidoNaoAdministrador() {
+    public static UsuarioRequest usuarioValidoNaoAdministrador() {
         String identificador = UUID.randomUUID().toString();
-        return UsuarioRequestDTO.builder()
+        return UsuarioRequest.builder()
                 .nome("QA Automation " + identificador.substring(0, 8))
                 .email("qa.automation." + identificador + "@teste.com")
                 .password(SENHA_PADRAO)
@@ -36,9 +31,9 @@ public final class UsuarioFactory {
                 .build();
     }
 
-    public static UsuarioRequestDTO usuarioComEmailInvalido() {
-        UsuarioRequestDTO base = usuarioValidoAdministrador();
-        return UsuarioRequestDTO.builder()
+    public static UsuarioRequest usuarioComEmailInvalido() {
+        UsuarioRequest base = usuarioValidoAdministrador();
+        return UsuarioRequest.builder()
                 .nome(base.getNome())
                 .email("email-sem-formato-valido")
                 .password(base.getPassword())
@@ -46,13 +41,13 @@ public final class UsuarioFactory {
                 .build();
     }
 
-    public static UsuarioRequestDTO usuarioComAdministradorInvalido() {
-        UsuarioRequestDTO base = usuarioValidoAdministrador();
-        return UsuarioRequestDTO.builder()
+    public static UsuarioRequest usuarioComAdministradorInvalido() {
+        UsuarioRequest base = usuarioValidoAdministrador();
+        return UsuarioRequest.builder()
                 .nome(base.getNome())
                 .email(base.getEmail())
                 .password(base.getPassword())
-                .administrador("sim") // valor fora do domínio esperado ('true' | 'false')
+                .administrador("sim")
                 .build();
     }
 }

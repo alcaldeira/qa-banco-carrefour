@@ -1,12 +1,8 @@
-package com.serverest.api.dto;
+package com.serverest.api.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-/**
- * DTO de resposta para um usuário, retornado por GET /usuarios/{id}
- * e como item da lista em GET /usuarios.
- */
-public class UsuarioResponseDTO {
+public class UsuarioResponse {
 
     private String nome;
     private String email;

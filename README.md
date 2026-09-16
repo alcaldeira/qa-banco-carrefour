@@ -1,6 +1,6 @@
 # ServeRest API Tests
 
-Suíte de testes automatizados para os endpoints de usuário da [ServeRest](https://serverest.dev/#/) (`/usuarios` e `/login`), construída com **Java 17 + RestAssured + JUnit 5**, seguindo o padrão **AAA (Arrange, Act, Assert)**, com **DTOs**, **validação de contrato (JSON Schema)**, **casos de negação de negócio** e **autenticação JWT reaproveitável**. A execução gera relatório **Allure**, publicado como artefato em uma pipeline de **GitHub Actions**.
+Suíte de testes automatizados para os endpoints de usuário da [ServeRest](https://serverest.dev/#/) (`/usuarios` e `/login`), construída com **Java 17 + RestAssured + JUnit 5**, seguindo o padrão **AAA (Arrange, Act, Assert)** encadeado no estilo `given()/when()/then()`, com **models tipados** para request/response, **validação de contrato (JSON Schema)**, **casos de negação de negócio** e **autenticação JWT reaproveitável**. A execução gera relatório **Allure**, publicado como artefato em uma pipeline de **GitHub Actions**.
 
 ## Sumário
 
@@ -20,31 +20,36 @@ Suíte de testes automatizados para os endpoints de usuário da [ServeRest](http
 | Linguagem / build | Java 17 + Maven | Padrão de mercado para automação de API com RestAssured; requisito do desafio já sugere RestAssured como opção. |
 | Cliente HTTP | [RestAssured](https://github.com/rest-assured/rest-assured) | DSL fluente (`given().when().then()`), integra nativamente com JSON Schema e com Allure. |
 | Runner | JUnit 5 | Padrão atual do ecossistema Java. |
-| Serialização | Jackson + DTOs | Nenhum `Map`/JSON solto nos testes felizes — o corpo de requisição e resposta trafega como objeto tipado. `Map<String,String>` é usado apenas nos poucos casos de erro de validação, cujo formato é dinâmico (a API retorna uma chave por campo inválido). |
+| Serialização | Jackson + models (POJOs) | Nenhum `Map`/JSON solto no corpo das requisições — o payload de `POST`/`PUT` trafega como objeto tipado (`UsuarioRequest`, `LoginRequest`, ...), com builder fluente. Nas respostas, o mesmo objeto é usado quando o teste precisa do dado para um passo seguinte (ex.: pegar o `_id` criado); quando a checagem é só um campo isolado, ela é feita direto no `.then().body("campo", ...)`, sem POJO — o jeito mais natural de asserção no RestAssured. |
 | Contrato | `json-schema-validator` (RestAssured) | Cada resposta relevante é validada contra um schema em `src/test/resources/schemas`, garantindo que a API não quebre o contrato silenciosamente. |
-| Autenticação | `AuthManager` (código único, reaproveitado) | Cria um usuário administrador uma única vez por execução, faz `POST /login` e cacheia o token JWT (`Bearer ...`) para todas as chamadas autenticadas (`PUT`, `DELETE`). |
+| Autenticação | `AuthManager` (código único, reaproveitado) | Cria um usuário administrador uma única vez por execução, faz `POST /login` e cacheia o token JWT (`Bearer ...`). `AuthManager.authenticatedRequest()` devolve o próprio `given()` já autenticado, pronto para compor `.when()...then()` nos testes de `PUT`/`DELETE`. |
 | Relatório | Allure (`allure-junit5` + `allure-rest-assured`) | Anexa request/response de cada chamada HTTP ao relatório, com histórico, categorização por `@Epic`/`@Feature` e captura de falhas. |
 | Rate limit | `RateLimitRetryFilter` | A API impõe 100 req/min (requisito do desafio); o filtro reexecuta automaticamente qualquer chamada que receba `HTTP 429`, com backoff. A suíte também roda os testes **sequencialmente** (`junit-platform.properties`), evitando estourar o limite. |
 
 ### Padrão AAA
 
-Todo teste segue explicitamente os três blocos comentados:
+O RestAssured já nasceu com uma DSL BDD (`given().when().then()`) que mapeia 1:1 para Arrange/Act/Assert — `given()` monta a massa de dados e a requisição (Arrange), `when()` dispara a chamada (Act) e `then()` verifica o resultado (Assert). Em vez de brigar com esse formato, cada teste usa exatamente essa cadeia única, síncrona e legível:
 
 ```java
 @Test
 void deveCriarUsuarioAdministradorComSucesso() {
     // Arrange
-    UsuarioRequestDTO novoUsuario = UsuarioFactory.usuarioValidoAdministrador();
+    UsuarioRequest novoUsuario = UsuarioFactory.usuarioValidoAdministrador();
 
-    // Act
-    Response response = UsuariosClient.criar(novoUsuario);
-
-    // Assert
-    response.then().statusCode(201)...
+    // Act + Assert (Given -> When -> Then)
+    given()
+            .body(novoUsuario)
+    .when()
+            .post("/usuarios")
+    .then()
+            .statusCode(201)
+            .body(matchesJsonSchemaInClasspath("schemas/cadastro-sucesso-schema.json"))
+            .body("message", equalTo("Cadastro realizado com sucesso"))
+            .body("_id", notNullValue());
 }
 ```
 
-O **Act** nunca encadeia asserções (`.then().statusCode(...)`) diretamente — a chamada retorna um `Response` puro, e a verificação acontece isolada no bloco **Assert**, deixando a intenção de cada etapa inequívoca.
+O **Arrange** continua isolado (monta a massa de dados, eventualmente cria um pré-requisito via sua própria chamada `given/when/then`); **Act** e **Assert** vivem fundidos na mesma cadeia fluente, que é exatamente como o RestAssured foi desenhado para ser lido. Quando uma asserção precisa comparar dois campos da própria resposta entre si (ex.: `quantidade == usuarios.size()`) ou reaproveitar um dado em outra chamada (ex.: o `_id` criado), o `.then().extract().as(Model.class)` faz a ponte para um objeto tipado — sem nunca voltar a separar a chamada HTTP da verificação em dois blocos desconectados.
 
 ### Separação por endpoint
 
@@ -63,18 +68,20 @@ Cada verbo/rota tem seu próprio arquivo de teste em `src/test/java/com/serveres
 
 ```
 src/test/java/com/serverest/api/
-├── auth/       AuthManager.java        → autenticação JWT reaproveitável (cria admin + login + cache do token)
-├── base/       BaseTest.java           → setup único do RestAssured (baseURI, filtros, logging)
-├── clients/    UsuariosClient.java     → wrapper único das chamadas HTTP de /usuarios
-├── dto/        *.java                  → DTOs de request/response (UsuarioRequestDTO, UsuarioResponseDTO, ...)
+├── auth/       AuthManager.java        → autenticação JWT reaproveitável (cria admin + login + cache do token);
+│                                          expõe o "Given" autenticado usado nos testes de PUT/DELETE
+├── base/       BaseTest.java           → setup único do RestAssured (baseURI, filtros, logging, Content-Type padrão)
+├── model/      *.java                  → objetos de request/response (UsuarioRequest, UsuarioResponse, ...)
 ├── factory/    UsuarioFactory.java     → massa de dados (usuário válido admin/não-admin, e-mail inválido, ...)
 ├── filters/    RateLimitRetryFilter.java → retry com backoff em HTTP 429
-└── tests/      *.java                  → os 6 arquivos de teste listados acima
+└── tests/      *.java                  → os 6 arquivos de teste listados acima, cada um com given()/when()/then() inline
 
 src/test/resources/
 ├── schemas/*.json                      → JSON Schemas para validação de contrato
 └── junit-platform.properties           → execução sequencial (respeita o rate limit)
 ```
+
+Não há uma classe "client" intermediária escondendo a chamada HTTP: cada teste monta seu próprio `given()/when()/then()`, usando o path literal do endpoint (`/usuarios`, `/usuarios/{id}`, `/login`). Isso mantém a cadeia do RestAssured visível de ponta a ponta em cada cenário; o único código HTTP reaproveitado entre testes é o `Given` autenticado do `AuthManager`, que existe para não duplicar a lógica de obtenção do token JWT.
 
 ## Como rodar localmente
 
@@ -98,6 +105,26 @@ Para apontar para outra instância da API (ex.: um mock local), sobrescreva a pr
 mvn clean test -Dapi.base.url=http://localhost:3000
 ```
 
+### Rodar por tag (`@Tag`)
+
+Os testes têm tags JUnit 5, filtráveis via Surefire sem precisar escolher classes na mão:
+
+| Tag | O que é |
+|---|---|
+| `smoke` | 1 cenário de caminho feliz por endpoint (6 testes) — checagem rápida |
+| `regressivo` | suíte completa (os 21 testes) — inclui `smoke` + todos os casos de negação |
+| `login` | os 3 testes de `POST /login` |
+| `usuarios` | os 18 testes de `/usuarios` (os 5 verbos) |
+
+```bash
+mvn test -Dgroups=smoke            # só os caminhos felizes
+mvn test -Dgroups=login            # só autenticação
+mvn test -Dgroups=regressivo       # suíte completa (equivalente a rodar sem filtro)
+mvn test -DexcludedGroups=smoke    # tudo, exceto os smoke
+```
+
+`mvn test` sem `-Dgroups`/`-DexcludedGroups` roda tudo normalmente (o padrão nas duas propriedades é vazio, sem filtro).
+
 ### Gerar e abrir o relatório Allure localmente
 
 ```bash
@@ -115,7 +142,7 @@ O relatório traz, por teste:
 - Status (passou/falhou), duração e histórico entre execuções;
 - Request e response completos (headers, body) anexados automaticamente via `AllureRestAssured`;
 - Agrupamento por `@Epic("API de Usuários" / "Autenticação")` e `@Feature("GET /usuarios", "POST /usuarios", ...)`;
-- Descrição de negócio de cada cenário via `@Description`.
+- Nome do cenário via `@DisplayName`, já legível o suficiente sem precisar de uma segunda descrição.
 
 ## Pipeline de CI
 

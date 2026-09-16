@@ -26,6 +26,11 @@
 
         <!-- URL base da API sob teste; pode ser sobrescrita via -Dapi.base.url=... -->
         <api.base.url>https://serverest.dev</api.base.url>
+
+        <!-- Filtro de tags JUnit 5 (ex.: -Dgroups=smoke, -Dgroups=login, -DexcludedGroups=regressivo).
+             Vazio por padrão = roda tudo. -->
+        <groups></groups>
+        <excludedGroups></excludedGroups>
     </properties>
 
     <dependencyManagement>
@@ -65,7 +70,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Jackson: (de)serialização dos DTOs <-> JSON -->
+        <!-- Jackson: (de)serialização dos models (request/response) <-> JSON -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
@@ -107,6 +112,8 @@
                         <api.base.url>${api.base.url}</api.base.url>
                         <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
                     </systemPropertyVariables>
+                    <groups>${groups}</groups>
+                    <excludedGroups>${excludedGroups}</excludedGroups>
                 </configuration>
             </plugin>
 

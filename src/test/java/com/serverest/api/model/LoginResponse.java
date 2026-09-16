@@ -1,10 +1,6 @@
-package com.serverest.api.dto;
+package com.serverest.api.model;
 
-/**
- * DTO de resposta de POST /login em caso de sucesso: contém o token JWT
- * (campo "authorization", já no formato "Bearer &lt;token&gt;").
- */
-public class LoginResponseDTO {
+public class LoginResponse {
 
     private String message;
     private String authorization;

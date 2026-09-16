@@ -1,22 +1,19 @@
-package com.serverest.api.dto;
+package com.serverest.api.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-/**
- * DTO de requisição usado em POST /usuarios e PUT /usuarios/{id}.
- */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class UsuarioRequestDTO {
+public class UsuarioRequest {
 
     private String nome;
     private String email;
     private String password;
     private String administrador;
 
-    public UsuarioRequestDTO() {
+    public UsuarioRequest() {
     }
 
-    public UsuarioRequestDTO(String nome, String email, String password, String administrador) {
+    public UsuarioRequest(String nome, String email, String password, String administrador) {
         this.nome = nome;
         this.email = email;
         this.password = password;
@@ -59,10 +56,6 @@ public class UsuarioRequestDTO {
         return new Builder();
     }
 
-    /**
-     * Builder fluente: deixa explícito, no Arrange de cada teste, apenas o dado
-     * relevante para o cenário (ex.: só o e-mail inválido), sem repetir boilerplate.
-     */
     public static class Builder {
         private String nome;
         private String email;
@@ -89,8 +82,8 @@ public class UsuarioRequestDTO {
             return this;
         }
 
-        public UsuarioRequestDTO build() {
-            return new UsuarioRequestDTO(nome, email, password, administrador);
+        public UsuarioRequest build() {
+            return new UsuarioRequest(nome, email, password, administrador);
         }
     }
 }

@@ -3,31 +3,37 @@ package com.serverest.api.base;
 import com.serverest.api.filters.RateLimitRetryFilter;
 import io.qameta.allure.restassured.AllureRestAssured;
 import io.restassured.RestAssured;
+import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.config.LogConfig;
 import io.restassured.config.RestAssuredConfig;
+import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeAll;
 
-/**
- * Classe base de todos os testes de API. Centraliza a configuração global do RestAssured
- * (URL base, filtros e logging) para que cada classe de teste foque apenas no cenário (AAA),
- * sem duplicar setup.
- */
 public abstract class BaseTest {
 
     protected static final String BASE_URL = System.getProperty("api.base.url", "https://serverest.dev");
 
+    private static volatile boolean configured = false;
+
     @BeforeAll
-    static void configurarRestAssured() {
+    static synchronized void configurarRestAssured() {
+        if (configured) {
+            return;
+        }
+        configured = true;
+
         RestAssured.baseURI = BASE_URL;
 
-        // Loga request/response automaticamente apenas quando uma assertiva falha,
-        // mantendo o log da pipeline legível nos cenários de sucesso.
         RestAssured.config = RestAssuredConfig.config()
                 .logConfig(LogConfig.logConfig().enableLoggingOfRequestAndResponseIfValidationFails());
 
         RestAssured.filters(
-                new AllureRestAssured(),      // anexa request/response de cada chamada ao relatório Allure
-                new RateLimitRetryFilter()     // reexecuta chamadas que esbarrarem no rate limit (100 req/min)
+                new AllureRestAssured(),
+                new RateLimitRetryFilter()
         );
+
+        RestAssured.requestSpecification = new RequestSpecBuilder()
+                .setContentType(ContentType.JSON)
+                .build();
     }
 }

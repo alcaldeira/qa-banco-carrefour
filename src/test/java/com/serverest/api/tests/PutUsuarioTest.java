@@ -1,127 +1,145 @@
 package com.serverest.api.tests;
 
+import com.serverest.api.auth.AuthManager;
 import com.serverest.api.base.BaseTest;
-import com.serverest.api.clients.UsuariosClient;
-import com.serverest.api.dto.CadastroResponseDTO;
-import com.serverest.api.dto.MensagemResponseDTO;
-import com.serverest.api.dto.UsuarioRequestDTO;
-import com.serverest.api.dto.UsuarioResponseDTO;
 import com.serverest.api.factory.UsuarioFactory;
-import io.qameta.allure.Description;
+import com.serverest.api.model.CadastroResponse;
+import com.serverest.api.model.UsuarioRequest;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
-import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Map;
 import java.util.UUID;
 
+import static io.restassured.RestAssured.given;
 import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 
-/**
- * PUT /usuarios/{id} — atualização de usuário, autenticada via token JWT reaproveitável
- * ({@link com.serverest.api.auth.AuthManager}).
- */
 @Epic("API de Usuários")
 @Feature("PUT /usuarios/{id} - Atualização")
+@Tag("usuarios")
+@Tag("regressivo")
 class PutUsuarioTest extends BaseTest {
 
     @Test
+    @Tag("smoke")
     @DisplayName("Deve atualizar um usuário existente com sucesso, autenticado via JWT")
-    @Description("Atualiza nome e o campo administrador de um usuário previamente criado e confirma a persistência via GET")
     void deveAtualizarUsuarioExistenteComSucesso() {
         // Arrange
-        UsuarioRequestDTO usuarioOriginal = UsuarioFactory.usuarioValidoAdministrador();
-        CadastroResponseDTO cadastro = UsuariosClient.criar(usuarioOriginal).as(CadastroResponseDTO.class);
+        UsuarioRequest usuarioOriginal = UsuarioFactory.usuarioValidoAdministrador();
+        CadastroResponse cadastro =
+                given()
+                        .body(usuarioOriginal)
+                .when()
+                        .post("/usuarios")
+                .then()
+                        .statusCode(201)
+                        .extract().as(CadastroResponse.class);
 
-        UsuarioRequestDTO usuarioAtualizado = UsuarioRequestDTO.builder()
+        UsuarioRequest usuarioAtualizado = UsuarioRequest.builder()
                 .nome("Nome Atualizado QA")
                 .email(usuarioOriginal.getEmail())
                 .password(usuarioOriginal.getPassword())
                 .administrador("false")
                 .build();
 
-        // Act
-        Response response = UsuariosClient.atualizar(cadastro.getId(), usuarioAtualizado);
-
-        // Assert
-        response.then()
+        // Act + Assert
+        AuthManager.authenticatedRequest()
+                .body(usuarioAtualizado)
+        .when()
+                .put("/usuarios/{id}", cadastro.getId())
+        .then()
                 .statusCode(200)
-                .body(matchesJsonSchemaInClasspath("schemas/mensagem-schema.json"));
-        assertEquals("Registro alterado com sucesso", response.as(MensagemResponseDTO.class).getMessage());
+                .body(matchesJsonSchemaInClasspath("schemas/mensagem-schema.json"))
+                .body("message", equalTo("Registro alterado com sucesso"));
 
-        UsuarioResponseDTO usuarioPersistido = UsuariosClient.buscarPorId(cadastro.getId()).as(UsuarioResponseDTO.class);
-        assertEquals("Nome Atualizado QA", usuarioPersistido.getNome());
-        assertEquals("false", usuarioPersistido.getAdministrador());
+        given()
+        .when()
+                .get("/usuarios/{id}", cadastro.getId())
+        .then()
+                .statusCode(200)
+                .body("nome", equalTo("Nome Atualizado QA"))
+                .body("administrador", equalTo("false"));
     }
 
     @Test
     @DisplayName("Deve criar um novo usuário (upsert) quando o id informado no PUT não existe")
-    @Description("Regra de negócio particular da API: PUT em um id inexistente cadastra um novo usuário (201), em vez de 404")
     void deveCriarUsuarioAoAtualizarIdInexistente() {
         // Arrange
         String idInexistente = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-        UsuarioRequestDTO usuario = UsuarioFactory.usuarioValidoAdministrador();
+        UsuarioRequest usuario = UsuarioFactory.usuarioValidoAdministrador();
 
-        // Act
-        Response response = UsuariosClient.atualizar(idInexistente, usuario);
-
-        // Assert
-        response.then()
+        // Act + Assert
+        AuthManager.authenticatedRequest()
+                .body(usuario)
+        .when()
+                .put("/usuarios/{id}", idInexistente)
+        .then()
                 .statusCode(201)
-                .body(matchesJsonSchemaInClasspath("schemas/cadastro-sucesso-schema.json"));
-        CadastroResponseDTO corpo = response.as(CadastroResponseDTO.class);
-        assertEquals("Cadastro realizado com sucesso", corpo.getMessage());
-        assertNotNull(corpo.getId());
+                .body(matchesJsonSchemaInClasspath("schemas/cadastro-sucesso-schema.json"))
+                .body("message", equalTo("Cadastro realizado com sucesso"))
+                .body("_id", notNullValue());
     }
 
     @Test
     @DisplayName("Não deve permitir atualização sem os campos obrigatórios")
-    @Description("Mesma regra de validação do POST se aplica ao PUT: todos os 4 campos são obrigatórios")
     void naoDeveAtualizarUsuarioSemCamposObrigatorios() {
         // Arrange
-        UsuarioRequestDTO usuarioOriginal = UsuarioFactory.usuarioValidoAdministrador();
-        CadastroResponseDTO cadastro = UsuariosClient.criar(usuarioOriginal).as(CadastroResponseDTO.class);
+        UsuarioRequest usuarioOriginal = UsuarioFactory.usuarioValidoAdministrador();
+        CadastroResponse cadastro =
+                given()
+                        .body(usuarioOriginal)
+                .when()
+                        .post("/usuarios")
+                .then()
+                        .statusCode(201)
+                        .extract().as(CadastroResponse.class);
 
-        // Act
-        Response response = UsuariosClient.atualizar(cadastro.getId(), Collections.emptyMap());
-
-        // Assert
-        response.then().statusCode(400);
-        @SuppressWarnings("unchecked")
-        Map<String, String> erros = response.as(Map.class);
-        assertEquals("nome é obrigatório", erros.get("nome"));
-        assertEquals("email é obrigatório", erros.get("email"));
-        assertEquals("password é obrigatório", erros.get("password"));
-        assertEquals("administrador é obrigatório", erros.get("administrador"));
+        // Act + Assert
+        AuthManager.authenticatedRequest()
+                .body(Collections.emptyMap())
+        .when()
+                .put("/usuarios/{id}", cadastro.getId())
+        .then()
+                .statusCode(400)
+                .body("nome", equalTo("nome é obrigatório"))
+                .body("email", equalTo("email é obrigatório"))
+                .body("password", equalTo("password é obrigatório"))
+                .body("administrador", equalTo("administrador é obrigatório"));
     }
 
     @Test
     @DisplayName("Não deve permitir atualização com e-mail em formato inválido")
-    @Description("Validação de negação: campo email com formato inválido também é rejeitado no PUT")
     void naoDeveAtualizarUsuarioComEmailInvalido() {
         // Arrange
-        UsuarioRequestDTO usuarioOriginal = UsuarioFactory.usuarioValidoAdministrador();
-        CadastroResponseDTO cadastro = UsuariosClient.criar(usuarioOriginal).as(CadastroResponseDTO.class);
+        UsuarioRequest usuarioOriginal = UsuarioFactory.usuarioValidoAdministrador();
+        CadastroResponse cadastro =
+                given()
+                        .body(usuarioOriginal)
+                .when()
+                        .post("/usuarios")
+                .then()
+                        .statusCode(201)
+                        .extract().as(CadastroResponse.class);
 
-        UsuarioRequestDTO atualizacaoInvalida = UsuarioRequestDTO.builder()
+        UsuarioRequest atualizacaoInvalida = UsuarioRequest.builder()
                 .nome(usuarioOriginal.getNome())
                 .email("email-sem-formato-valido")
                 .password(usuarioOriginal.getPassword())
                 .administrador(usuarioOriginal.getAdministrador())
                 .build();
 
-        // Act
-        Response response = UsuariosClient.atualizar(cadastro.getId(), atualizacaoInvalida);
-
-        // Assert
-        response.then().statusCode(400);
-        @SuppressWarnings("unchecked")
-        Map<String, String> erros = response.as(Map.class);
-        assertEquals("email deve ser um email válido", erros.get("email"));
+        // Act + Assert
+        AuthManager.authenticatedRequest()
+                .body(atualizacaoInvalida)
+        .when()
+                .put("/usuarios/{id}", cadastro.getId())
+        .then()
+                .statusCode(400)
+                .body("email", equalTo("email deve ser um email válido"));
     }
 }

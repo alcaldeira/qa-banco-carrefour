@@ -1,12 +1,8 @@
-package com.serverest.api.dto;
+package com.serverest.api.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-/**
- * DTO de resposta para criação de usuário: POST /usuarios (201) e
- * PUT /usuarios/{id} quando o id informado não existe e a API faz upsert (201).
- */
-public class CadastroResponseDTO {
+public class CadastroResponse {
 
     private String message;
 

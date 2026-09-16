@@ -6,11 +6,6 @@ import io.restassured.response.Response;
 import io.restassured.specification.FilterableRequestSpecification;
 import io.restassured.specification.FilterableResponseSpecification;
 
-/**
- * A API sob teste impõe um limite de 100 requisições por minuto (ver requisito 2 do desafio).
- * Este filtro deixa a suíte resiliente a esse limite: ao receber HTTP 429 (Too Many Requests),
- * aguarda um pequeno intervalo com backoff e tenta novamente, em vez de falhar o teste de imediato.
- */
 public class RateLimitRetryFilter implements Filter {
 
     private static final int MAX_RETRIES = 3;
