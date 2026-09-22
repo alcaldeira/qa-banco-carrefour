@@ -1,7 +1,5 @@
-target/
-*.class
 .idea/
-*.iml
 .vscode/
 .DS_Store
-.allure/
+Thumbs.db
+.playwright-mcp/

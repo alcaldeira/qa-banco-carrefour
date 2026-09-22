@@ -1,16 +1,30 @@
-name: API Tests - ServeRest /usuarios
+name: API Tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
+    paths:
+      - 'API/**'
+      - '.github/workflows/api-tests.yml'
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
+    paths:
+      - 'API/**'
+      - '.github/workflows/api-tests.yml'
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
-  test:
-    name: Executar suíte RestAssured + gerar relatório Allure
+  api-tests:
+    name: Run ServeRest API tests
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: API
 
     steps:
       - name: Checkout do código
@@ -23,7 +37,7 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Rodar os testes (mvn clean test)
+      - name: Executar testes da API
         run: mvn -B clean test
 
       # Publica os resultados mesmo se algum teste falhar, para não perder evidência do que quebrou.
@@ -32,7 +46,7 @@ jobs:
         if: always()
         with:
           name: Resultados JUnit
-          path: target/surefire-reports/*.xml
+          path: API/target/surefire-reports/*.xml
           reporter: java-junit
           fail-on-error: false
 
@@ -40,26 +54,26 @@ jobs:
         if: always()
         run: mvn -B io.qameta.allure:allure-maven:2.12.0:report
 
-      - name: Publicar relatório Allure (HTML) como artefato
+      - name: Publicar relatório Allure
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
-          path: target/site/allure-maven-plugin
+          path: API/target/site/allure-maven-plugin
           retention-days: 30
 
-      - name: Publicar resultados brutos do Allure como artefato
+      - name: Publicar resultados do Allure
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
-          path: target/allure-results
+          path: API/target/allure-results
           retention-days: 30
 
-      - name: Publicar relatórios do Surefire (JUnit XML) como artefato
+      - name: Publicar relatórios do JUnit
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: target/surefire-reports
+          path: API/target/surefire-reports
           retention-days: 30
