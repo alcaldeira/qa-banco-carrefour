@@ -67,4 +67,20 @@ test.describe('Sauce Demo - professional automation suite', () => {
     await productsPage.sortByPriceHighToLow();
     await productsPage.expectSortedByHighToLow();
   });
+
+  test('Add Test.allTheThings() T-Shirt to cart and reach checkout information step', async ({ page }) => {
+    const loginPage = new LoginPage(page);
+    const productsPage = new ProductsPage(page);
+    const cartPage = new CartPage(page);
+    const checkoutPage = new CheckoutPage(page);
+
+    await loginPage.open();
+    await loginPage.login(validUser.username, validUser.password);
+    await productsPage.expectLoaded();
+    await productsPage.addProductByName('Test.allTheThings() T-Shirt (Red)');
+    await productsPage.openCart();
+    await cartPage.expectLoaded();
+    await cartPage.proceedToCheckout();
+    await checkoutPage.expectCustomerInfoVisible();
+  });
 });
